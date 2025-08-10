@@ -57,7 +57,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.setHeader('Set-Cookie', cookiesToSet);
 
     // Redirect to the app root
-    return res.redirect('/');
+    res.redirect('/');
   } catch (err: any) {
     console.error(err);
     return res.status(500).send('Failed to exchange code for token');

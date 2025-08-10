@@ -5,6 +5,8 @@ import {
   fetchAudioFeatures,
   refreshAccessToken,
 } from '../../../lib/spotify';
+import { generateTrackEnrichment } from '../../../lib/claude';
+import { getCachedContent, setCachedContent } from '../../../lib/cache';
 
 interface TrackCore {
   title: string;
@@ -12,6 +14,7 @@ interface TrackCore {
   album: string;
   release_date: string;
   duration_ms: number;
+  progress_ms: number;
   isrc: string | null;
   spotify_track_id: string;
   cover_url: string;
@@ -29,11 +32,28 @@ interface AudioFeatures {
 interface EnrichmentData {
   track_core: TrackCore;
   audio_features: AudioFeatures;
+  track_stats: TrackStats;
   credits: any;
   performance: any;
   critical: any;
   similar_recos: any;
   sidebar_markdown: string;
+}
+
+interface TrackStats {
+  popularity: number;
+  explicit: boolean;
+  markets_available: number;
+  album_total_tracks: number;
+  album_type: string;
+  release_year: string;
+  artist_info: {
+    name: string;
+    followers?: number;
+    popularity?: number;
+    genres?: string[];
+    top_tracks?: string[];
+  }[];
 }
 
 function parseCookieHeader(cookieHeader: string | undefined): Record<string, string> {
@@ -106,6 +126,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       album: item.album?.name ?? '',
       release_date: item.album?.release_date ?? '',
       duration_ms: item.duration_ms,
+      progress_ms: currentlyPlaying?.progress_ms ?? 0,
       isrc: item.external_ids?.isrc ?? null,
       spotify_track_id: item.id,
       cover_url: item.album?.images?.[0]?.url ?? '',
@@ -118,6 +139,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     } catch (err) {
       console.warn('Audio features unavailable', err);
     }
+    
     const audioFeatures: AudioFeatures = {
       tempo_bpm: audioFeaturesRaw?.tempo ?? 0,
       key: audioFeaturesRaw ? keyFromInt(audioFeaturesRaw.key) : 'C',
@@ -127,16 +149,69 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       valence: audioFeaturesRaw?.valence ?? 0,
     };
 
+    // Generate Claude enrichment with caching
+    let sidebarMarkdown: string;
+    
+    // Check cache first
+    const cachedContent = getCachedContent(item.id);
+    if (cachedContent) {
+      console.log(`Using cached content for track ${item.id}`);
+      sidebarMarkdown = cachedContent;
+    } else {
+      console.log(`Generating new Claude content for track ${item.id}`);
+      try {
+        sidebarMarkdown = await generateTrackEnrichment({
+          title: trackCore.title,
+          artists: trackCore.artists,
+          album: trackCore.album,
+          release_date: trackCore.release_date,
+          audioFeatures: audioFeaturesRaw ? {
+            tempo_bpm: audioFeatures.tempo_bpm,
+            key: audioFeatures.key,
+            mode: audioFeatures.mode,
+            energy: audioFeatures.energy,
+            danceability: audioFeatures.danceability,
+            valence: audioFeatures.valence,
+          } : undefined,
+        });
+        
+        // Cache the generated content
+        setCachedContent(item.id, sidebarMarkdown);
+        
+      } catch (err) {
+        console.warn('Claude enrichment failed', err);
+        sidebarMarkdown = recent
+          ? `# ${trackCore.title}\n\n**Last played track** by **${trackCore.artists.join(', ')}**\n\nFrom the album "${trackCore.album}" (${trackCore.release_date})`
+          : `# ${trackCore.title}\n\n**Currently playing** by **${trackCore.artists.join(', ')}**\n\nFrom the album "${trackCore.album}" (${trackCore.release_date})`;
+      }
+    }
+
+    // Extract track stats
+    const trackStats: TrackStats = {
+      popularity: item.popularity ?? 0,
+      explicit: item.explicit ?? false,
+      markets_available: item.available_markets?.length ?? 0,
+      album_total_tracks: item.album?.total_tracks ?? 0,
+      album_type: item.album?.album_type ?? 'unknown',
+      release_year: item.album?.release_date ? new Date(item.album.release_date).getFullYear().toString() : 'unknown',
+      artist_info: item.artists?.map((artist: any) => ({
+        name: artist.name,
+        followers: artist.followers?.total,
+        popularity: artist.popularity,
+        genres: artist.genres || [],
+        top_tracks: [], // We'll populate this with mock data for now
+      })) || [],
+    };
+
     const result: EnrichmentData = {
       track_core: trackCore,
       audio_features: audioFeatures,
+      track_stats: trackStats,
       credits: {},
       performance: {},
       critical: {},
       similar_recos: [],
-      sidebar_markdown: recent
-        ? `Last played track **${trackCore.title}** by **${trackCore.artists.join(', ')}**.`
-        : `Currently playing **${trackCore.title}** by **${trackCore.artists.join(', ')}**.`,
+      sidebar_markdown: sidebarMarkdown,
     };
     return res.status(200).json(result);
   } catch (err) {

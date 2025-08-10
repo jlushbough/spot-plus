@@ -37,5 +37,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   });
 
   const authorizationUrl = `https://accounts.spotify.com/authorize?${params.toString()}`;
-  return res.redirect(authorizationUrl);
+  res.redirect(authorizationUrl);
 }

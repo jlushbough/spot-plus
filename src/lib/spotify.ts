@@ -106,7 +106,13 @@ export async function fetchAudioFeatures(accessToken: string, trackId: string) {
     },
   });
   if (!res.ok) {
-    throw new Error('Failed to fetch audio features');
+    if (res.status === 404) {
+      throw new Error(`Audio features not available for track ${trackId}`);
+    }
+    if (res.status === 403) {
+      throw new Error('Insufficient permissions to fetch audio features');
+    }
+    throw new Error(`Failed to fetch audio features: ${res.status} ${res.statusText}`);
   }
   const data = await res.json();
   return data;
