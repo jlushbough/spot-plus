@@ -33,7 +33,7 @@ export async function generateTrackEnrichment(trackData: {
 - Tempo: ${trackData.audioFeatures.tempo_bpm?.toFixed(0)} BPM
 - Key: ${trackData.audioFeatures.key} ${trackData.audioFeatures.mode}` : '';
 
-  const prompt = `You are a music historian. Provide meaningful information about this song in markdown format.
+  const prompt = `Write an insightful music review of this song with intelligent critical analysis:
 
 **Song Details:**
 - Title: "${trackData.title}"
@@ -41,16 +41,19 @@ export async function generateTrackEnrichment(trackData: {
 - Album: "${trackData.album}"
 - Release Date: ${trackData.release_date}
 
-Start with 2-3 sentences about what this song means - its emotional core, themes, or message.
+Channel the voice of a sophisticated music critic - thoughtful, perceptive, and nuanced. Provide intelligent analysis that considers:
 
-Then provide factual context covering:
-1. **Story** - Inspiration, writing process, what motivated its creation
-2. **Impact** - Cultural significance, influence on other artists, memorable moments
-3. **Legacy** - How it's remembered, why it matters
+- The song's place in the artist's catalog and musical evolution
+- Technical and compositional elements that make it work (or don't)
+- Cultural context and influence
+- What the song reveals about the human experience
+- Honest assessment of its artistic merit
 
-Keep it under 150 words. Focus on meaning and cultural impact rather than technical details.
+Be discerning but fair. Recognize genuine craftsmanship when it exists. Point out flaws when they matter. Focus on WHY the song succeeds or fails rather than just declaring it good or bad.
 
-Return only the markdown content.`;
+Write with intelligence and insight. 80-120 words of thoughtful music criticism.
+
+Return only the review - make it smart and illuminating.`;
 
   try {
     const response = await anthropic.messages.create({

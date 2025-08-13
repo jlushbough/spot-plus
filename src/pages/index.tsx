@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { marked } from 'marked';
 
 interface TrackCore {
   title: string;
@@ -37,6 +36,44 @@ interface TrackStats {
   markets_available: number;
 }
 
+interface TrackFact {
+  text: string;
+  source: 'spotify' | 'llm';
+  confidence: 'high' | 'medium' | 'low';
+}
+
+interface SongStory {
+  text: string;
+  source: 'spotify' | 'llm';
+  confidence: 'high' | 'medium' | 'low';
+}
+
+interface HeaviestLyrics {
+  text: string;
+  source: 'spotify' | 'llm';
+  confidence: 'high' | 'medium' | 'low';
+}
+
+interface BandInfo {
+  members: string[];
+  formation_year?: string;
+  origin?: string;
+  notable_facts: string[];
+}
+
+interface InterestingFacts {
+  facts: string[];
+}
+
+interface PanelData {
+  artist_header: string;
+  track_facts: TrackFact[];
+  song_story: SongStory;
+  heaviest_lyrics: HeaviestLyrics;
+  band_info: BandInfo;
+  interesting_facts: InterestingFacts;
+}
+
 interface EnrichmentData {
   track_core: TrackCore;
   audio_features: AudioFeatures;
@@ -51,7 +88,9 @@ interface EnrichmentData {
 export default function Home() {
   const [data, setData] = useState<EnrichmentData | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [trackFacts, setTrackFacts] = useState<string[]>([]);
+  const [panelData, setPanelData] = useState<PanelData | null>(null);
+  const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
   const formatNumber = (num: number) => {
     if (num >= 1000000) {
@@ -62,72 +101,25 @@ export default function Home() {
     return num.toString();
   };
 
-  const generateTrackFacts = async (core: TrackCore, stats?: TrackStats): Promise<string[]> => {
-    const facts = [];
-    
-    // Song length
-    const minutes = Math.floor(core.duration_ms / 60000);
-    const seconds = Math.floor((core.duration_ms % 60000) / 1000);
-    facts.push(`Length: ${minutes}:${String(seconds).padStart(2, '0')}`);
-    
-    // Make API call to get real facts about this specific song
+  const loadPanelData = async (enrichmentData: EnrichmentData) => {
     try {
-      const response = await fetch('/api/song-facts', {
+      const response = await fetch('/api/song-panel', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          title: core.title,
-          artist: core.artists[0],
-          album: core.album,
-          release_date: core.release_date,
-        }),
+        body: JSON.stringify(enrichmentData),
       });
       
       if (response.ok) {
-        const songFacts = await response.json();
-        if (songFacts.studio) facts.push(`Studio: ${songFacts.studio}`);
-        if (songFacts.producer) facts.push(`Producer: ${songFacts.producer}`);
-        if (songFacts.albumSales) facts.push(`Album Sales: ${songFacts.albumSales}`);
+        const panel = await response.json();
+        setPanelData(panel);
       } else {
-        // Fallback if API fails
-        facts.push(`Studio: Information pending`);
-        facts.push(`Producer: Information pending`);
-        facts.push(`Album Sales: Information pending`);
+        console.error('Failed to load panel data');
       }
     } catch (error) {
-      // Fallback if API call fails
-      facts.push(`Studio: Information pending`);
-      facts.push(`Producer: Information pending`);
-      facts.push(`Album Sales: Information pending`);
+      console.error('Error loading panel data:', error);
     }
-    
-    // Additional stats if available
-    if (stats) {
-      facts.push(`Track Popularity: ${stats.popularity}/100`);
-      facts.push(`Album Type: ${stats.album_type}`);
-      if (stats.markets_available) {
-        facts.push(`Available in ${stats.markets_available} markets`);
-      }
-    }
-    
-    return facts;
-  };
-
-  const loadTrackFacts = async (core: TrackCore, stats?: TrackStats) => {
-    const facts = await generateTrackFacts(core, stats);
-    setTrackFacts(facts);
-  };
-
-  const generateSongMeaning = (core: TrackCore) => {
-    // Generate brief band facts for dashboard style
-    const artist = core.artists[0];
-    
-    return {
-      band: artist,
-      facts: `Active since their debut, known for their distinctive sound and contributions to music. Part of the "${core.album}" era.`
-    };
   };
 
   const fetchData = async () => {
@@ -143,24 +135,49 @@ export default function Home() {
       }
       const json = await res.json();
       setData(json);
+      setLastRefresh(new Date());
+      
+      // Determine if music is currently playing based on progress
+      const isCurrentlyPlaying = json.track_core?.progress_ms > 0 && 
+        json.track_core?.progress_ms < json.track_core?.duration_ms;
+      setIsPlaying(isCurrentlyPlaying);
     } catch (err) {
       console.error(err);
     }
   };
 
+  const manualRefresh = async () => {
+    await fetchData();
+  };
+
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 5000);
+    
+    // Smart polling strategy
+    const createInterval = () => {
+      let intervalTime;
+      if (isPlaying) {
+        intervalTime = 30000; // 30 seconds when playing
+      } else if (data) {
+        intervalTime = 120000; // 2 minutes when paused but track exists
+      } else {
+        intervalTime = 300000; // 5 minutes when no track
+      }
+      
+      return setInterval(fetchData, intervalTime);
+    };
+    
+    const interval = createInterval();
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isPlaying, data?.track_core?.spotify_track_id]);
 
-  // Load track facts when data changes
+  // Load panel data when data changes
   useEffect(() => {
-    if (data?.track_core && data?.stats) {
-      loadTrackFacts(data.track_core, data.stats);
+    if (data) {
+      loadPanelData(data);
     }
-  }, [data?.track_core?.spotify_track_id]); // Remove loadTrackFacts from deps
+  }, [data?.track_core?.spotify_track_id]);
 
   if (error === 'unauthenticated') {
     return (
@@ -175,7 +192,7 @@ export default function Home() {
     );
   }
 
-  if (!data) {
+  if (!data || !panelData) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-900">
         Loading...
@@ -183,17 +200,35 @@ export default function Home() {
     );
   }
 
-  const html = marked.parse(data.sidebar_markdown ?? '');
   const core = data.track_core;
-  const audioFeatures = data.audio_features;
   const stats = data.stats;
-  
-  // Generate meaning using our own logic
-  const songInfo = generateSongMeaning(core);
 
   return (
     <div className="grid md:grid-cols-2 gap-8 p-6 md:p-10 min-h-screen bg-gray-900">
-      {/* Left pane */}
+      {/* Header with refresh button */}
+      <div className="md:col-span-2 flex justify-between items-center mb-4">
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2">
+            <div className={`w-2 h-2 rounded-full ${isPlaying ? 'bg-green-500' : 'bg-gray-500'}`}></div>
+            <span className="text-gray-400 text-sm">
+              {isPlaying ? 'Playing' : 'Paused'}
+            </span>
+          </div>
+          {lastRefresh && (
+            <span className="text-gray-500 text-xs">
+              Last updated: {lastRefresh.toLocaleTimeString()}
+            </span>
+          )}
+        </div>
+        <button
+          onClick={manualRefresh}
+          className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm rounded-md transition-colors"
+        >
+          Refresh Now
+        </button>
+      </div>
+      
+      {/* Left pane - restored with track info */}
       <div className="flex flex-col items-center md:items-start space-y-4">
         {core.cover_url && (
           <img
@@ -208,67 +243,99 @@ export default function Home() {
           <p className="text-gray-400 text-sm">Album: {core.album}</p>
           <p className="text-gray-400 text-sm">Released: {core.release_date}</p>
           
-          {/* LLM Facts under release date */}
+          {/* Track Facts under release date */}
           <div className="mt-4 pt-4 border-t border-gray-700">
             <h3 className="text-white font-semibold mb-3 text-sm">Track Facts</h3>
             <div className="space-y-1 text-xs text-gray-300">
-              {trackFacts.length > 0 ? trackFacts.map((fact, index) => (
-                <div key={index} className="text-gray-300">
-                  {fact}
+              {panelData.track_facts.map((fact, index) => (
+                <div key={index} className="flex justify-between items-center">
+                  <span className="text-gray-300">{fact.text}</span>
+                  <div className="flex items-center space-x-1 ml-2 flex-shrink-0">
+                    <span className={`text-xs px-1 py-0.5 rounded ${
+                      fact.source === 'spotify' 
+                        ? 'bg-green-900 text-green-300' 
+                        : 'bg-blue-900 text-blue-300'
+                    }`}>
+                      {fact.source}
+                    </span>
+                  </div>
                 </div>
-              )) : (
-                <div className="text-gray-500">Loading facts...</div>
-              )}
+              ))}
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Credits section below image */}
-        {stats && stats.artist_info && (
-          <div className="w-full max-w-sm">
-            <h3 className="text-white font-semibold mb-3 text-base">Credits</h3>
-            {stats.artist_info.map((artist, index) => (
-              <div key={index} className="mb-3 last:mb-0 border-l-2 border-gray-600 pl-3">
-                <h4 className="text-white font-medium text-sm mb-1">{artist.name}</h4>
-                {artist.followers && (
-                  <p className="text-gray-300 text-xs mb-1">
-                    {formatNumber(artist.followers)} followers
-                  </p>
-                )}
-                {artist.popularity && (
-                  <p className="text-gray-300 text-xs mb-1">
-                    Popularity: {artist.popularity}/100
-                  </p>
-                )}
-                {artist.genres && artist.genres.length > 0 && (
-                  <p className="text-gray-400 text-xs">
-                    {artist.genres.slice(0, 3).join(', ')}
-                  </p>
-                )}
+      {/* Right pane - band members and interesting facts */}
+      <div className="space-y-6">
+        {/* Critical Review */}
+        <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+          <h3 className="text-white font-semibold mb-3 text-lg">{core.title}</h3>
+          
+          {/* Heaviest Lyrics - integrated at top */}
+          <div className="text-gray-300 leading-relaxed text-sm mb-4 whitespace-pre-line pl-6 italic border-l-4 border-gray-600 bg-gray-700/30 p-3 rounded">
+            {panelData.heaviest_lyrics ? panelData.heaviest_lyrics.text : 'Loading most impactful lyrics...'}
+          </div>
+          
+          {/* Provocative review */}
+          <div className="text-gray-300 leading-relaxed text-sm mb-2 whitespace-pre-line">
+            {panelData.song_story.text}
+          </div>
+          <span className={`text-xs px-2 py-1 rounded ${
+            panelData.song_story.source === 'spotify' 
+              ? 'bg-green-900 text-green-300' 
+              : 'bg-blue-900 text-blue-300'
+          }`}>
+            {panelData.song_story.source}
+          </span>
+        </div>
+
+        {/* Band Members */}
+        {panelData.band_info.members.length > 0 && (
+          <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+            <h3 className="text-white font-semibold mb-3 text-lg">Band Members</h3>
+            <div className="space-y-2">
+              {panelData.band_info.members.map((member, index) => (
+                <div key={index} className="text-gray-300 text-sm">
+                  • {member}
+                </div>
+              ))}
+            </div>
+            {(panelData.band_info.formation_year || panelData.band_info.origin) && (
+              <div className="mt-3 pt-3 border-t border-gray-700 text-xs text-gray-400">
+                {panelData.band_info.formation_year && `Formed: ${panelData.band_info.formation_year}`}
+                {panelData.band_info.formation_year && panelData.band_info.origin && ' • '}
+                {panelData.band_info.origin && `Origin: ${panelData.band_info.origin}`}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Band Notable Facts */}
+        {panelData.band_info.notable_facts.length > 0 && (
+          <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+            <h3 className="text-white font-semibold mb-3 text-lg">Notable Facts</h3>
+            <div className="space-y-2">
+              {panelData.band_info.notable_facts.map((fact, index) => (
+                <div key={index} className="text-gray-300 text-sm">
+                  • {fact}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Interesting Facts */}
+        <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+          <h3 className="text-white font-semibold mb-3 text-lg">Track Info</h3>
+          <div className="space-y-2">
+            {panelData.interesting_facts.facts.map((fact, index) => (
+              <div key={index} className="text-gray-300 text-sm">
+                • {fact}
               </div>
             ))}
           </div>
-        )}
-      </div>
-
-      {/* Right pane: Dashboard Style */}
-      <div className="space-y-6">
-        {/* Band Info */}
-        <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-          <h3 className="text-white font-semibold mb-2">Band: {songInfo.band}</h3>
-          <p className="text-gray-300 text-sm">{songInfo.facts}</p>
         </div>
-        
-        {/* Claude content if available - cleaned up */}
-        {data.sidebar_markdown && (
-          <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-            <h3 className="text-white font-semibold mb-3">Song Story</h3>
-            <div 
-              className="prose prose-invert prose-sm max-w-none text-gray-300"
-              dangerouslySetInnerHTML={{ __html: html }}
-            />
-          </div>
-        )}
       </div>
     </div>
   );

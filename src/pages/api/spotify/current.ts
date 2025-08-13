@@ -137,7 +137,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
       audioFeaturesRaw = await fetchAudioFeatures(accessToken, item.id);
     } catch (err) {
-      console.warn('Audio features unavailable', err);
+      // Only log if it's not a permissions error (which is expected)
+      if (err instanceof Error && !err.message.includes('Insufficient permissions')) {
+        console.warn('Audio features unavailable', err);
+      }
+      // Silently continue for permissions errors
     }
     
     const audioFeatures: AudioFeatures = {
