@@ -18,7 +18,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const codeChallenge = generateCodeChallenge(codeVerifier);
 
   // Persist the code verifier in a short-lived cookie (15 minutes) for later token exchange
-  const cookie = `spotify_pkce_verifier=${encodeURIComponent(codeVerifier)}; Path=/; HttpOnly; Secure; Max-Age=900; SameSite=Lax`;
+  const isProduction = process.env.NODE_ENV === 'production';
+  const secureFlag = isProduction ? '; Secure' : '';
+  const cookie = `spotify_pkce_verifier=${encodeURIComponent(codeVerifier)}; Path=/; HttpOnly${secureFlag}; Max-Age=900; SameSite=Lax`;
   res.setHeader('Set-Cookie', cookie);
 
   const scope = [

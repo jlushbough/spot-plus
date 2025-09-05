@@ -37,29 +37,44 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const accessToken = tokenData.access_token;
     const expiresIn = tokenData.expires_in;
 
+    console.log('Token exchange successful:', { 
+      hasRefreshToken: !!refreshToken, 
+      hasAccessToken: !!accessToken, 
+      expiresIn 
+    });
+
     // Build cookies to set: clear PKCE, set refresh token, set access token & expiry
     const cookiesToSet: string[] = [];
+    const isProduction = process.env.NODE_ENV === 'production';
+    const secureFlag = isProduction ? '; Secure' : '';
+    
     // Clear PKCE verifier
-    cookiesToSet.push(`spotify_pkce_verifier=; Path=/; HttpOnly; Max-Age=0; Secure; SameSite=Lax`);
+    cookiesToSet.push(`spotify_pkce_verifier=; Path=/; HttpOnly; Max-Age=0${secureFlag}; SameSite=Lax`);
     // Set refresh token cookie if present
     if (refreshToken) {
       cookiesToSet.push(
-        `spotify_refresh_token=${encodeURIComponent(refreshToken)}; Path=/; HttpOnly; Secure; Max-Age=${60 * 60 * 24 * 30}; SameSite=Lax`
+        `spotify_refresh_token=${encodeURIComponent(refreshToken)}; Path=/; HttpOnly${secureFlag}; Max-Age=${60 * 60 * 24 * 30}; SameSite=Lax`
       );
     }
     // Set access token and expiry cookies (non-HttpOnly so client can refresh quickly)
     cookiesToSet.push(
-      `spotify_access_token=${encodeURIComponent(accessToken)}; Path=/; Max-Age=${expiresIn}; Secure; SameSite=Lax`
+      `spotify_access_token=${encodeURIComponent(accessToken)}; Path=/; Max-Age=${expiresIn}${secureFlag}; SameSite=Lax`
     );
     cookiesToSet.push(
-      `spotify_token_expires=${Date.now() + expiresIn * 1000}; Path=/; Max-Age=${expiresIn}; Secure; SameSite=Lax`
+      `spotify_token_expires=${Date.now() + expiresIn * 1000}; Path=/; Max-Age=${expiresIn}${secureFlag}; SameSite=Lax`
     );
     res.setHeader('Set-Cookie', cookiesToSet);
 
+    console.log('Cookies set, redirecting to home');
     // Redirect to the app root
     res.redirect('/');
   } catch (err: any) {
-    console.error(err);
-    return res.status(500).send('Failed to exchange code for token');
+    console.error('Token exchange failed:', err);
+    console.error('Error details:', {
+      message: err.message,
+      status: err.status,
+      response: err.response?.data || err.response
+    });
+    return res.status(500).send(`Failed to exchange code for token: ${err.message}`);
   }
 }

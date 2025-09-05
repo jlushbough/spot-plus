@@ -91,11 +91,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const newExpiresAt = Date.now() + tokenData.expires_in * 1000;
       // Set new access token cookies
       const cookiesToSet: string[] = [];
+      const isProduction = process.env.NODE_ENV === 'production';
+      const secureFlag = isProduction ? '; Secure' : '';
       cookiesToSet.push(
-        `spotify_access_token=${encodeURIComponent(accessToken)}; Path=/; Max-Age=${tokenData.expires_in}; Secure; SameSite=Lax`
+        `spotify_access_token=${encodeURIComponent(accessToken)}; Path=/; Max-Age=${tokenData.expires_in}${secureFlag}; SameSite=Lax`
       );
       cookiesToSet.push(
-        `spotify_token_expires=${newExpiresAt}; Path=/; Max-Age=${tokenData.expires_in}; Secure; SameSite=Lax`
+        `spotify_token_expires=${newExpiresAt}; Path=/; Max-Age=${tokenData.expires_in}${secureFlag}; SameSite=Lax`
       );
       res.setHeader('Set-Cookie', cookiesToSet);
     } catch (err) {
@@ -217,7 +219,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       similar_recos: [],
       sidebar_markdown: sidebarMarkdown,
     };
-    return res.status(200).json(result);
+    
+    return res.status(200).json({
+      success: true,
+      data: result,
+      is_playing: currentlyPlaying?.is_playing || false
+    });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Failed to fetch track information' });

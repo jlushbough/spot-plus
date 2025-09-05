@@ -29,10 +29,25 @@ export async function exchangeCodeForToken(
     },
     body: params.toString(),
   });
+  
   if (!res.ok) {
-    throw new Error('Failed to exchange code for token');
+    const errorText = await res.text();
+    console.error('Spotify token exchange failed:', {
+      status: res.status,
+      statusText: res.statusText,
+      body: errorText
+    });
+    throw new Error(`Failed to exchange code for token: ${res.status} ${res.statusText} - ${errorText}`);
   }
+  
   const data = (await res.json()) as SpotifyTokenResponse;
+  console.log('Token exchange response:', {
+    hasAccessToken: !!data.access_token,
+    hasRefreshToken: !!data.refresh_token,
+    expiresIn: data.expires_in,
+    tokenType: data.token_type,
+    scope: data.scope
+  });
   return data;
 }
 

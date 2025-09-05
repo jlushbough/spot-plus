@@ -1,18 +1,37 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { generateTrackEnrichment } from '../../lib/claude';
+import { generateEnhancedReview, EnhancedReview } from '../../lib/claude';
 import { generateBandInformation } from '../../lib/band-info';
 import { generateHeaviestLyrics } from '../../lib/heaviest-lyrics';
+import { getCachedContent, setCachedContent } from '../../lib/cache';
 
 interface TrackFact {
   text: string;
-  source: 'spotify' | 'llm';
+  source: 'spotify' | 'llm' | 'database';
   confidence: 'high' | 'medium' | 'low';
+}
+
+interface SongwriterInfo {
+  writers: string[];
+  producer?: string;
+  background: string;
+  source: 'known' | 'inferred' | 'unknown';
 }
 
 interface SongStory {
   text: string;
-  source: 'spotify' | 'llm';
+  themes: string[];
+  meaning: string;
+  cultural_context: string;
+  source: 'spotify' | 'llm' | 'analysis';
   confidence: 'high' | 'medium' | 'low';
+}
+
+interface CriticalReview {
+  verdict: string;
+  rating: number;
+  strengths: string[];
+  weaknesses: string[];
+  source: 'critical_analysis';
 }
 
 interface HeaviestLyrics {
@@ -35,10 +54,13 @@ interface InterestingFacts {
 interface PanelData {
   artist_header: string;
   track_facts: TrackFact[];
+  songwriter_info: SongwriterInfo;
   song_story: SongStory;
+  critical_review: CriticalReview;
   heaviest_lyrics: HeaviestLyrics;
   band_info: BandInfo;
   interesting_facts: InterestingFacts;
+  sources_attribution: string;
 }
 
 // Format duration to mm:ss
@@ -53,12 +75,12 @@ function formatPopularity(popularity: number): string {
   return `Top ~${popularity}% on Spotify`;
 }
 
-// Generate track facts with source attribution
-function generateTrackFacts(data: any): TrackFact[] {
+// Generate track facts with enhanced source attribution
+function generateTrackFacts(data: any, enhancedReview?: EnhancedReview): TrackFact[] {
   const facts: TrackFact[] = [];
   const { track_core, stats } = data;
   
-  // Duration (from Spotify)
+  // Duration (from Spotify API)
   if (track_core?.duration_ms) {
     facts.push({
       text: `Duration: ${formatDuration(track_core.duration_ms)}`,
@@ -67,7 +89,7 @@ function generateTrackFacts(data: any): TrackFact[] {
     });
   }
   
-  // Release year (from Spotify)
+  // Release year (from Spotify metadata)
   if (track_core?.release_date) {
     const year = new Date(track_core.release_date).getFullYear();
     facts.push({
@@ -77,7 +99,7 @@ function generateTrackFacts(data: any): TrackFact[] {
     });
   }
   
-  // Popularity (from Spotify)
+  // Popularity (from Spotify metrics)
   if (stats?.popularity !== undefined) {
     facts.push({
       text: formatPopularity(stats.popularity),
@@ -86,7 +108,7 @@ function generateTrackFacts(data: any): TrackFact[] {
     });
   }
   
-  // Album type (from Spotify)
+  // Album type (from Spotify catalog)
   if (stats?.album_type) {
     facts.push({
       text: `Album type: ${stats.album_type}`,
@@ -95,56 +117,26 @@ function generateTrackFacts(data: any): TrackFact[] {
     });
   }
 
-  // Backfill with interesting facts from general knowledge
-  if (track_core?.artists?.[0]) {
-    const artist = track_core.artists[0].toLowerCase();
-    const title = track_core.title.toLowerCase();
-    
-    // Add producer info for well-known cases
-    if (artist.includes('beatles')) {
-      facts.push({
-        text: 'Producer: George Martin',
-        source: 'llm',
-        confidence: 'high'
-      });
-      facts.push({
-        text: 'Studio: Abbey Road Studios',
-        source: 'llm',
-        confidence: 'high'
-      });
-    } else if (artist.includes('pink floyd')) {
-      facts.push({
-        text: 'Producer: Pink Floyd',
-        source: 'llm',
-        confidence: 'medium'
-      });
-      facts.push({
-        text: 'Studio: Abbey Road Studios',
-        source: 'llm',
-        confidence: 'medium'
-      });
-    } else if (artist.includes('radiohead')) {
-      facts.push({
-        text: 'Producer: Nigel Godrich',
-        source: 'llm',
-        confidence: 'medium'
-      });
-    } else if (artist.includes('bob dylan')) {
-      facts.push({
-        text: 'Producer: Bob Johnston',
-        source: 'llm',
-        confidence: 'medium'
-      });
-    } else if (artist.includes('nirvana')) {
-      facts.push({
-        text: 'Producer: Butch Vig',
-        source: 'llm',
-        confidence: 'medium'
-      });
-    }
+  // Producer information from enhanced review (research-based)
+  if (enhancedReview?.songwriter_info.producer) {
+    facts.push({
+      text: `Producer: ${enhancedReview.songwriter_info.producer}`,
+      source: enhancedReview.songwriter_info.source === 'known' ? 'database' : 'llm',
+      confidence: enhancedReview.songwriter_info.source === 'known' ? 'high' : 
+                  enhancedReview.songwriter_info.source === 'inferred' ? 'medium' : 'low'
+    });
   }
   
-  return facts.slice(0, 7); // Limit to 5-7 facts
+  // Markets available (from Spotify distribution data)
+  if (stats?.markets_available > 100) {
+    facts.push({
+      text: `Available in ${stats.markets_available} markets`,
+      source: 'spotify',
+      confidence: 'high'
+    });
+  }
+  
+  return facts.slice(0, 6); // Limit to essential facts
 }
 
 // Generate band information using LLM
@@ -154,7 +146,8 @@ async function generateBandInfo(data: any): Promise<BandInfo> {
   
   // Try to get band info from LLM first
   try {
-    const bandContent = await generateBandInformation(artist);
+    const bandResult = await generateBandInformation(artist);
+    const bandContent = bandResult.content;
     
     // Parse the LLM response to extract structured data
     const lines = bandContent.split('\n').filter(line => line.trim());
@@ -324,102 +317,99 @@ function generateInterestingFacts(data: any): InterestingFacts {
   
   return { facts: facts.slice(0, 5) }; // Limit to 5 facts
 }
-async function generateSongStory(data: any): Promise<SongStory> {
-  const { track_core, stats } = data;
-  
-  try {
-    // Use the existing Claude integration to generate a real story
-    const llmContent = await generateTrackEnrichment({
-      title: track_core.title,
-      artists: track_core.artists,
-      album: track_core.album,
-      release_date: track_core.release_date,
-    });
-    
-    // Extract just the story part from the markdown, remove headers and formatting
-    let story = llmContent
-      .replace(/^#.*$/gm, '') // Remove headers
-      .replace(/\*\*(.*?)\*\*/g, '$1') // Remove bold formatting
-      .replace(/\*(.*?)\*/g, '$1') // Remove italic formatting
-      .replace(/\n+/g, ' ') // Replace newlines with spaces
-      .trim();
-    
-    // Take first paragraph or limit to reasonable length
-    const sentences = story.split('.').filter(s => s.trim().length > 10);
-    if (sentences.length > 4) {
-      story = sentences.slice(0, 4).join('.') + '.';
-    }
-    
-    // Ensure it's not too long (60-110 words target)
-    const words = story.split(' ').filter(w => w.length > 0);
-    if (words.length > 110) {
-      story = words.slice(0, 110).join(' ') + '...';
-    }
-    
-    return {
-      text: story,
-      source: 'llm',
-      confidence: 'high'
-    };
-    
-  } catch (error) {
-    console.error('Error generating LLM story:', error);
-    
-    // Fallback to basic thematic analysis when LLM fails
-    let fallbackStory = `${track_core?.title || 'This track'} explores themes central to ${track_core?.artists?.[0] || 'the artist'}'s work.`;
-    
-    if (track_core?.album) {
-      fallbackStory += ` From "${track_core.album}", it represents their perspective on key issues or experiences.`;
-    }
-    
-    if (stats?.artist_info?.[0]?.genres?.length) {
-      const genre = stats.artist_info[0].genres[0];
-      fallbackStory += ` The lyrics reflect typical ${genre} themes and concerns.`;
-    } else {
-      fallbackStory += ` The song's message resonates through its direct lyrical approach.`;
-    }
-    
-    return {
-      text: fallbackStory,
-      source: 'llm',
-      confidence: 'low'
-    };
-  }
+// Convert enhanced review to structured song story
+function createSongStory(enhancedReview: EnhancedReview): SongStory {
+  return {
+    text: enhancedReview.thematic_analysis.songMeaning,
+    themes: enhancedReview.thematic_analysis.primaryThemes,
+    meaning: enhancedReview.thematic_analysis.songMeaning,
+    cultural_context: enhancedReview.thematic_analysis.culturalContext,
+    source: 'analysis',
+    confidence: 'high'
+  };
+}
+
+// Convert enhanced review to critical assessment
+function createCriticalReview(enhancedReview: EnhancedReview): CriticalReview {
+  return {
+    verdict: enhancedReview.critical_review.verdict,
+    rating: enhancedReview.critical_review.rating,
+    strengths: enhancedReview.critical_review.strengths,
+    weaknesses: enhancedReview.critical_review.weaknesses,
+    source: 'critical_analysis'
+  };
+}
+
+// Convert enhanced review to songwriter info
+function createSongwriterInfo(enhancedReview: EnhancedReview): SongwriterInfo {
+  return {
+    writers: enhancedReview.songwriter_info.writers,
+    producer: enhancedReview.songwriter_info.producer,
+    background: enhancedReview.songwriter_info.writerBackground,
+    source: enhancedReview.songwriter_info.source
+  };
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
 
   const data = req.body;
   
   if (!data.track_core) {
-    return res.status(400).json({ error: 'track_core is required' });
+    return res.status(400).json({ success: false, error: 'track_core is required' });
   }
 
+  const trackId = data.track_core.spotify_track_id;
+  const cacheKey = `panel_${trackId}`;
+
   try {
+    // Check cache first
+    const cachedContent = getCachedContent(cacheKey);
+    if (cachedContent) {
+      console.log(`Using cached panel data for track ${trackId}`);
+      return res.status(200).json({ success: true, data: JSON.parse(cachedContent) });
+    }
+
+    console.log(`Generating new panel data for track ${trackId}`);
+    
+    // Generate enhanced review with songwriter info, themes, and critical analysis
+    const enhancedReview = await generateEnhancedReview({
+      title: data.track_core.title,
+      artists: data.track_core.artists,
+      album: data.track_core.album,
+      release_date: data.track_core.release_date,
+      audioFeatures: data.audio_features
+    });
+
     const panelData: PanelData = {
       artist_header: data.track_core.artists?.[0] || 'Unknown Artist',
-      track_facts: generateTrackFacts(data),
-      song_story: await generateSongStory(data),
+      track_facts: generateTrackFacts(data, enhancedReview),
+      songwriter_info: createSongwriterInfo(enhancedReview),
+      song_story: createSongStory(enhancedReview),
+      critical_review: createCriticalReview(enhancedReview),
       heaviest_lyrics: {
-        text: await generateHeaviestLyrics({
+        text: (await generateHeaviestLyrics({
           title: data.track_core.title,
           artists: data.track_core.artists,
           album: data.track_core.album,
           release_date: data.track_core.release_date
-        }),
+        })).content,
         source: 'llm',
         confidence: 'high'
       },
       band_info: await generateBandInfo(data),
-      interesting_facts: generateInterestingFacts(data)
+      interesting_facts: generateInterestingFacts(data),
+      sources_attribution: `Sources: Spotify API (track data, popularity), Music Database (songwriter credits), Critical Analysis (themes, opinion). ${enhancedReview.sources_note}`
     };
 
-    res.status(200).json(panelData);
+    // Cache the generated panel data
+    setCachedContent(cacheKey, JSON.stringify(panelData));
+
+    res.status(200).json({ success: true, data: panelData });
   } catch (error) {
     console.error('Error generating panel data:', error);
-    res.status(500).json({ error: 'Failed to generate panel data' });
+    res.status(500).json({ success: false, error: 'Failed to generate panel data' });
   }
 }
