@@ -258,8 +258,13 @@ export default function Home() {
               valence={audioFeatures.valence}
             />
 
-            {/* Track Facts */}
-            <TrackFactCard facts={panelData.track_facts} />
+            {/* Track Facts - Simplified to just popularity */}
+            {panelData.track_facts && panelData.track_facts.length > 0 && (
+              <TrackFactCard facts={panelData.track_facts} />
+            )}
+
+            {/* Wikipedia Facts - Now prominently displayed */}
+            <InterestingFactsCard interestingFacts={panelData.interesting_facts} />
           </div>
 
           {/* Right Column - Enriched Content */}
@@ -271,14 +276,11 @@ export default function Home() {
               heaviestLyrics={panelData.heaviest_lyrics}
             />
 
-            {/* Band Information */}
+            {/* Band Information - Moved to bottom */}
             <BandInfoCard
               bandInfo={panelData.band_info}
               artistName={core.artists[0]}
             />
-
-            {/* Interesting Facts */}
-            <InterestingFactsCard interestingFacts={panelData.interesting_facts} />
           </div>
         </div>
       </div>

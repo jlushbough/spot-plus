@@ -1,7 +1,8 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { generateTrackEnrichment } from '../../lib/claude';
+import { generateTrackEnrichment, analyzeWikipediaContent } from '../../lib/claude';
 import { generateBandInformation } from '../../lib/band-info';
 import { generateHeaviestLyrics } from '../../lib/heaviest-lyrics';
+import { getWikipediaContentForSong } from '../../lib/wikipedia';
 
 interface TrackFact {
   text: string;
@@ -53,30 +54,11 @@ function formatPopularity(popularity: number): string {
   return `Top ~${popularity}% on Spotify`;
 }
 
-// Generate track facts with source attribution
+// Generate track facts with source attribution - simplified to just popularity
 function generateTrackFacts(data: any): TrackFact[] {
   const facts: TrackFact[] = [];
-  const { track_core, stats } = data;
-  
-  // Duration (from Spotify)
-  if (track_core?.duration_ms) {
-    facts.push({
-      text: `Duration: ${formatDuration(track_core.duration_ms)}`,
-      source: 'spotify',
-      confidence: 'high'
-    });
-  }
-  
-  // Release year (from Spotify)
-  if (track_core?.release_date) {
-    const year = new Date(track_core.release_date).getFullYear();
-    facts.push({
-      text: `Released: ${year}`,
-      source: 'spotify', 
-      confidence: 'high'
-    });
-  }
-  
+  const { stats } = data;
+
   // Popularity (from Spotify)
   if (stats?.popularity !== undefined) {
     facts.push({
@@ -85,66 +67,8 @@ function generateTrackFacts(data: any): TrackFact[] {
       confidence: 'high'
     });
   }
-  
-  // Album type (from Spotify)
-  if (stats?.album_type) {
-    facts.push({
-      text: `Album type: ${stats.album_type}`,
-      source: 'spotify',
-      confidence: 'high'
-    });
-  }
 
-  // Backfill with interesting facts from general knowledge
-  if (track_core?.artists?.[0]) {
-    const artist = track_core.artists[0].toLowerCase();
-    const title = track_core.title.toLowerCase();
-    
-    // Add producer info for well-known cases
-    if (artist.includes('beatles')) {
-      facts.push({
-        text: 'Producer: George Martin',
-        source: 'llm',
-        confidence: 'high'
-      });
-      facts.push({
-        text: 'Studio: Abbey Road Studios',
-        source: 'llm',
-        confidence: 'high'
-      });
-    } else if (artist.includes('pink floyd')) {
-      facts.push({
-        text: 'Producer: Pink Floyd',
-        source: 'llm',
-        confidence: 'medium'
-      });
-      facts.push({
-        text: 'Studio: Abbey Road Studios',
-        source: 'llm',
-        confidence: 'medium'
-      });
-    } else if (artist.includes('radiohead')) {
-      facts.push({
-        text: 'Producer: Nigel Godrich',
-        source: 'llm',
-        confidence: 'medium'
-      });
-    } else if (artist.includes('bob dylan')) {
-      facts.push({
-        text: 'Producer: Bob Johnston',
-        source: 'llm',
-        confidence: 'medium'
-      });
-    } else if (artist.includes('nirvana')) {
-      facts.push({
-        text: 'Producer: Butch Vig',
-        source: 'llm',
-        confidence: 'medium'
-      });
-    }
-  }
-  
-  return facts.slice(0, 7); // Limit to 5-7 facts
+  return facts;
 }
 
 // Generate band information using LLM
@@ -282,47 +206,43 @@ function generateHardcodedBandInfo(data: any): BandInfo {
   return bandInfo;
 }
 
-function generateInterestingFacts(data: any): InterestingFacts {
-  const { track_core, stats } = data;
-  const facts: string[] = [];
-  
-  // Add chart performance if high popularity
-  if (stats?.popularity > 70) {
-    facts.push(`This track has high popularity (${stats.popularity}/100) on Spotify`);
-  }
-  
-  // Add album context
-  if (track_core?.album && track_core?.release_date) {
-    const year = new Date(track_core.release_date).getFullYear();
-    facts.push(`Featured on "${track_core.album}" (${year})`);
-  }
-  
-  // Add genre information
-  if (stats?.artist_info?.[0]?.genres?.length) {
-    const genres = stats.artist_info[0].genres.slice(0, 2).join(' and ');
-    facts.push(`Classified as ${genres} music`);
-  }
-  
-  // Add follower count if significant
-  if (stats?.artist_info?.[0]?.followers && stats.artist_info[0].followers > 1000000) {
-    const followers = Math.round(stats.artist_info[0].followers / 1000000);
-    facts.push(`Artist has ${followers}M+ followers on Spotify`);
-  }
-  
-  // Add markets info
-  if (stats?.markets_available > 100) {
-    facts.push(`Available in ${stats.markets_available} countries worldwide`);
-  }
-  
-  // Ensure we have at least a few facts
-  if (facts.length < 3) {
-    facts.push(`Duration: ${Math.round(track_core?.duration_ms / 1000 / 60 * 100) / 100} minutes`);
-    if (stats?.album_type) {
-      facts.push(`Part of a ${stats.album_type} release`);
+async function generateInterestingFacts(data: any): Promise<InterestingFacts> {
+  const { track_core } = data;
+
+  try {
+    // Try to get Wikipedia content for the song first, then artist
+    const wikiData = await getWikipediaContentForSong(
+      track_core.title,
+      track_core.artists[0],
+      track_core.album
+    );
+
+    if (wikiData) {
+      // Use AI to analyze and extract interesting facts
+      const facts = await analyzeWikipediaContent({
+        wikipediaContent: wikiData.content,
+        source: wikiData.source,
+        title: track_core.title,
+        artist: track_core.artists[0],
+        wikiTitle: wikiData.title,
+      });
+
+      if (facts.length > 0) {
+        return { facts };
+      }
     }
+  } catch (error) {
+    console.error('Error generating Wikipedia facts:', error);
   }
-  
-  return { facts: facts.slice(0, 5) }; // Limit to 5 facts
+
+  // Fallback to basic facts if Wikipedia fails
+  const facts: string[] = [
+    `Released: ${new Date(track_core.release_date).getFullYear()}`,
+    `Featured on "${track_core.album}"`,
+    'No Wikipedia information available for this track'
+  ];
+
+  return { facts: facts.slice(0, 5) };
 }
 async function generateSongStory(data: any): Promise<SongStory> {
   const { track_core, stats } = data;
@@ -414,7 +334,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         confidence: 'high'
       },
       band_info: await generateBandInfo(data),
-      interesting_facts: generateInterestingFacts(data)
+      interesting_facts: await generateInterestingFacts(data)
     };
 
     res.status(200).json(panelData);
