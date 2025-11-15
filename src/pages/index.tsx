@@ -1,4 +1,12 @@
 import { useEffect, useState } from 'react';
+import { TrackHeader } from '@/components/TrackHeader';
+import { AudioFeatureVisualizer } from '@/components/AudioFeatureVisualizer';
+import { TrackFactCard } from '@/components/TrackFactCard';
+import { CriticalReview } from '@/components/CriticalReview';
+import { BandInfoCard } from '@/components/BandInfoCard';
+import { InterestingFactsCard } from '@/components/InterestingFactsCard';
+import { PlaybackStatus } from '@/components/PlaybackStatus';
+import { LoadingSkeleton } from '@/components/LoadingSkeleton';
 
 interface TrackCore {
   title: string;
@@ -92,15 +100,6 @@ export default function Home() {
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
-  const formatNumber = (num: number) => {
-    if (num >= 1000000) {
-      return (num / 1000000).toFixed(1) + 'M';
-    } else if (num >= 1000) {
-      return (num / 1000).toFixed(1) + 'K';
-    }
-    return num.toString();
-  };
-
   const loadPanelData = async (enrichmentData: EnrichmentData) => {
     try {
       const response = await fetch('/api/song-panel', {
@@ -179,161 +178,107 @@ export default function Home() {
     }
   }, [data?.track_core?.spotify_track_id]);
 
+  // Login Screen
   if (error === 'unauthenticated') {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-900">
-        <a
-          href="/api/spotify/login"
-          className="px-6 py-3 bg-green-500 hover:bg-green-600 text-white rounded-md font-semibold"
-        >
-          Log in with Spotify
-        </a>
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-black">
+        <div className="text-center space-y-8">
+          {/* Spotify Logo Effect */}
+          <div className="relative">
+            <div className="absolute inset-0 bg-green-500 blur-3xl opacity-20 animate-pulse" />
+            <svg className="w-24 h-24 mx-auto relative" viewBox="0 0 24 24" fill="#1DB954">
+              <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+            </svg>
+          </div>
+
+          <div className="space-y-3">
+            <h1 className="text-4xl font-bold text-white">Welcome to Spot Plus</h1>
+            <p className="text-gray-400">Discover deeper insights about your music</p>
+          </div>
+
+          <a
+            href="/api/spotify/login"
+            className="inline-flex items-center space-x-2 px-8 py-4 bg-green-500 hover:bg-green-600 text-white rounded-full font-semibold text-lg transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105"
+          >
+            <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+            </svg>
+            <span>Connect with Spotify</span>
+          </a>
+        </div>
       </div>
     );
   }
 
+  // Loading State
   if (!data || !panelData) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-900">
-        Loading...
-      </div>
-    );
+    return <LoadingSkeleton />;
   }
 
   const core = data.track_core;
-  const stats = data.stats;
+  const audioFeatures = data.audio_features;
 
   return (
-    <div className="grid md:grid-cols-2 gap-8 p-6 md:p-10 min-h-screen bg-gray-900">
-      {/* Header with refresh button */}
-      <div className="md:col-span-2 flex justify-between items-center mb-4">
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2">
-            <div className={`w-2 h-2 rounded-full ${isPlaying ? 'bg-green-500' : 'bg-gray-500'}`}></div>
-            <span className="text-gray-400 text-sm">
-              {isPlaying ? 'Playing' : 'Paused'}
-            </span>
-          </div>
-          {lastRefresh && (
-            <span className="text-gray-500 text-xs">
-              Last updated: {lastRefresh.toLocaleTimeString()}
-            </span>
-          )}
-        </div>
-        <button
-          onClick={manualRefresh}
-          className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm rounded-md transition-colors"
-        >
-          Refresh Now
-        </button>
-      </div>
-      
-      {/* Left pane - restored with track info */}
-      <div className="flex flex-col items-center md:items-start space-y-4">
-        {core.cover_url && (
-          <img
-            src={core.cover_url}
-            alt={`${core.title} – ${core.artists.join(', ')}`}
-            className="w-64 h-64 md:w-80 md:h-80 object-cover rounded-lg shadow-lg"
-          />
-        )}
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">{core.title}</h1>
-          <p className="text-gray-300 text-lg mb-1">{core.artists.join(', ')}</p>
-          <p className="text-gray-400 text-sm">Album: {core.album}</p>
-          <p className="text-gray-400 text-sm">Released: {core.release_date}</p>
-          
-          {/* Track Facts under release date */}
-          <div className="mt-4 pt-4 border-t border-gray-700">
-            <h3 className="text-white font-semibold mb-3 text-sm">Track Facts</h3>
-            <div className="space-y-1 text-xs text-gray-300">
-              {panelData.track_facts.map((fact, index) => (
-                <div key={index} className="flex justify-between items-center">
-                  <span className="text-gray-300">{fact.text}</span>
-                  <div className="flex items-center space-x-1 ml-2 flex-shrink-0">
-                    <span className={`text-xs px-1 py-0.5 rounded ${
-                      fact.source === 'spotify' 
-                        ? 'bg-green-900 text-green-300' 
-                        : 'bg-blue-900 text-blue-300'
-                    }`}>
-                      {fact.source}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-black p-6 md:p-10">
+      {/* Ambient Background */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-0 left-0 w-96 h-96 bg-green-500/10 rounded-full blur-3xl" />
       </div>
 
-      {/* Right pane - band members and interesting facts */}
-      <div className="space-y-6">
-        {/* Critical Review */}
-        <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-          <h3 className="text-white font-semibold mb-3 text-lg">{core.title}</h3>
-          
-          {/* Heaviest Lyrics - integrated at top */}
-          <div className="text-gray-300 leading-relaxed text-sm mb-4 whitespace-pre-line pl-6 italic border-l-4 border-gray-600 bg-gray-700/30 p-3 rounded">
-            {panelData.heaviest_lyrics ? panelData.heaviest_lyrics.text : 'Loading most impactful lyrics...'}
-          </div>
-          
-          {/* Provocative review */}
-          <div className="text-gray-300 leading-relaxed text-sm mb-2 whitespace-pre-line">
-            {panelData.song_story.text}
-          </div>
-          <span className={`text-xs px-2 py-1 rounded ${
-            panelData.song_story.source === 'spotify' 
-              ? 'bg-green-900 text-green-300' 
-              : 'bg-blue-900 text-blue-300'
-          }`}>
-            {panelData.song_story.source}
-          </span>
-        </div>
+      <div className="relative max-w-7xl mx-auto space-y-8">
+        {/* Playback Status Header */}
+        <PlaybackStatus
+          isPlaying={isPlaying}
+          lastRefresh={lastRefresh}
+          onRefresh={manualRefresh}
+        />
 
-        {/* Band Members */}
-        {panelData.band_info.members.length > 0 && (
-          <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-            <h3 className="text-white font-semibold mb-3 text-lg">Band Members</h3>
-            <div className="space-y-2">
-              {panelData.band_info.members.map((member, index) => (
-                <div key={index} className="text-gray-300 text-sm">
-                  • {member}
-                </div>
-              ))}
-            </div>
-            {(panelData.band_info.formation_year || panelData.band_info.origin) && (
-              <div className="mt-3 pt-3 border-t border-gray-700 text-xs text-gray-400">
-                {panelData.band_info.formation_year && `Formed: ${panelData.band_info.formation_year}`}
-                {panelData.band_info.formation_year && panelData.band_info.origin && ' • '}
-                {panelData.band_info.origin && `Origin: ${panelData.band_info.origin}`}
-              </div>
-            )}
-          </div>
-        )}
+        {/* Main Content Grid */}
+        <div className="grid lg:grid-cols-2 gap-8">
+          {/* Left Column - Track Info & Audio Analysis */}
+          <div className="space-y-8">
+            {/* Track Header with Album Art */}
+            <TrackHeader
+              title={core.title}
+              artists={core.artists}
+              album={core.album}
+              releaseDate={core.release_date}
+              coverUrl={core.cover_url}
+              isPlaying={isPlaying}
+            />
 
-        {/* Band Notable Facts */}
-        {panelData.band_info.notable_facts.length > 0 && (
-          <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-            <h3 className="text-white font-semibold mb-3 text-lg">Notable Facts</h3>
-            <div className="space-y-2">
-              {panelData.band_info.notable_facts.map((fact, index) => (
-                <div key={index} className="text-gray-300 text-sm">
-                  • {fact}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+            {/* Audio Feature Visualizer */}
+            <AudioFeatureVisualizer
+              tempo={audioFeatures.tempo_bpm}
+              key={audioFeatures.key}
+              mode={audioFeatures.mode}
+              energy={audioFeatures.energy}
+              danceability={audioFeatures.danceability}
+              valence={audioFeatures.valence}
+            />
 
-        {/* Interesting Facts */}
-        <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-          <h3 className="text-white font-semibold mb-3 text-lg">Track Info</h3>
-          <div className="space-y-2">
-            {panelData.interesting_facts.facts.map((fact, index) => (
-              <div key={index} className="text-gray-300 text-sm">
-                • {fact}
-              </div>
-            ))}
+            {/* Track Facts */}
+            <TrackFactCard facts={panelData.track_facts} />
+          </div>
+
+          {/* Right Column - Enriched Content */}
+          <div className="space-y-8">
+            {/* Critical Review with Lyrics */}
+            <CriticalReview
+              title={core.title}
+              songStory={panelData.song_story}
+              heaviestLyrics={panelData.heaviest_lyrics}
+            />
+
+            {/* Band Information */}
+            <BandInfoCard
+              bandInfo={panelData.band_info}
+              artistName={core.artists[0]}
+            />
+
+            {/* Interesting Facts */}
+            <InterestingFactsCard interestingFacts={panelData.interesting_facts} />
           </div>
         </div>
       </div>
