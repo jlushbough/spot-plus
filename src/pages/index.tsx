@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { TrackHeader } from '@/components/TrackHeader';
-import { AudioFeatureVisualizer } from '@/components/AudioFeatureVisualizer';
 import { TrackFactCard } from '@/components/TrackFactCard';
 import { CriticalReview } from '@/components/CriticalReview';
 import { BandInfoCard } from '@/components/BandInfoCard';
 import { InterestingFactsCard } from '@/components/InterestingFactsCard';
 import { PlaybackStatus } from '@/components/PlaybackStatus';
 import { LoadingSkeleton } from '@/components/LoadingSkeleton';
+import { SpotifyPopularityCard } from '@/components/SpotifyPopularityCard';
 
 interface TrackCore {
   title: string;
@@ -85,7 +85,7 @@ interface PanelData {
 interface EnrichmentData {
   track_core: TrackCore;
   audio_features: AudioFeatures;
-  stats: TrackStats;
+  track_stats: TrackStats;
   credits: any;
   performance: any;
   critical: any;
@@ -216,7 +216,7 @@ export default function Home() {
   }
 
   const core = data.track_core;
-  const audioFeatures = data.audio_features;
+  const trackStats = data.track_stats;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-black p-6 md:p-10">
@@ -248,23 +248,13 @@ export default function Home() {
               isPlaying={isPlaying}
             />
 
-            {/* Audio Feature Visualizer */}
-            <AudioFeatureVisualizer
-              tempo={audioFeatures.tempo_bpm}
-              key={audioFeatures.key}
-              mode={audioFeatures.mode}
-              energy={audioFeatures.energy}
-              danceability={audioFeatures.danceability}
-              valence={audioFeatures.valence}
-            />
+            {/* Spotify Popularity */}
+            <SpotifyPopularityCard popularity={trackStats?.popularity} />
 
             {/* Track Facts - Simplified to just popularity */}
             {panelData.track_facts && panelData.track_facts.length > 0 && (
               <TrackFactCard facts={panelData.track_facts} />
             )}
-
-            {/* Wikipedia Facts - Now prominently displayed */}
-            <InterestingFactsCard interestingFacts={panelData.interesting_facts} />
           </div>
 
           {/* Right Column - Enriched Content */}
@@ -275,6 +265,9 @@ export default function Home() {
               songStory={panelData.song_story}
               heaviestLyrics={panelData.heaviest_lyrics}
             />
+
+            {/* Wikipedia Facts - Right column second row */}
+            <InterestingFactsCard interestingFacts={panelData.interesting_facts} />
 
             {/* Band Information - Moved to bottom */}
             <BandInfoCard

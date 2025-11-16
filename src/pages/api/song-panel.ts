@@ -57,7 +57,7 @@ function formatPopularity(popularity: number): string {
 // Generate track facts with source attribution - simplified to just popularity
 function generateTrackFacts(data: any): TrackFact[] {
   const facts: TrackFact[] = [];
-  const { stats } = data;
+  const stats = data.track_stats || data.stats;
 
   // Popularity (from Spotify)
   if (stats?.popularity !== undefined) {
@@ -73,7 +73,8 @@ function generateTrackFacts(data: any): TrackFact[] {
 
 // Generate band information using LLM
 async function generateBandInfo(data: any): Promise<BandInfo> {
-  const { track_core, stats } = data;
+  const { track_core } = data;
+  const stats = data.track_stats || data.stats;
   const artist = track_core?.artists?.[0] || '';
   
   // Try to get band info from LLM first
@@ -121,7 +122,8 @@ async function generateBandInfo(data: any): Promise<BandInfo> {
 
 // Fallback hardcoded band information
 function generateHardcodedBandInfo(data: any): BandInfo {
-  const { track_core, stats } = data;
+  const { track_core } = data;
+  const stats = data.track_stats || data.stats;
   const artist = track_core?.artists?.[0]?.toLowerCase() || '';
   
   // Default structure
@@ -245,7 +247,8 @@ async function generateInterestingFacts(data: any): Promise<InterestingFacts> {
   return { facts: facts.slice(0, 5) };
 }
 async function generateSongStory(data: any): Promise<SongStory> {
-  const { track_core, stats } = data;
+  const { track_core } = data;
+  const stats = data.track_stats || data.stats;
   
   try {
     // Use the existing Claude integration to generate a real story
