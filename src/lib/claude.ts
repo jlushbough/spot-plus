@@ -17,67 +17,75 @@ export async function generateTrackEnrichment(trackData: {
     danceability?: number;
     valence?: number;
   };
+  wikipediaFacts?: string[];
+  popularity?: number;
 }): Promise<string> {
   if (!process.env.CLAUDE_API_KEY) {
-    return `# ${trackData.title}
-
-**Artist**: ${trackData.artists.join(', ')}  
-**Album**: ${trackData.album}  
-**Released**: ${trackData.release_date}
-
-*Claude enrichment unavailable - API key not configured*`;
+    return '';
   }
 
-  const audioInfo = trackData.audioFeatures ? 
-    `\n**Audio Features:**
+  const audioInfo = trackData.audioFeatures ?
+    `**Audio Features:**
 - Tempo: ${trackData.audioFeatures.tempo_bpm?.toFixed(0)} BPM
-- Key: ${trackData.audioFeatures.key} ${trackData.audioFeatures.mode}` : '';
+- Key: ${trackData.audioFeatures.key} ${trackData.audioFeatures.mode}
+- Energy: ${((trackData.audioFeatures.energy ?? 0) * 100).toFixed(0)}%
+- Danceability: ${((trackData.audioFeatures.danceability ?? 0) * 100).toFixed(0)}%` : '';
 
-  const prompt = `Write an insightful music review of this song with intelligent critical analysis:
+  const wikipediaContext = trackData.wikipediaFacts && trackData.wikipediaFacts.length > 0 ?
+    `**Wikipedia Facts:**
+${trackData.wikipediaFacts.slice(0, 6).map(fact => `- ${fact}`).join('\n')}` : '';
+
+  const popularityContext = trackData.popularity !== undefined ?
+    `**Spotify Popularity:** ${trackData.popularity}/100` : '';
+
+  const prompt = `You are a knowledgeable music journalist writing a brief, factual insight about this song.
 
 **Song Details:**
 - Title: "${trackData.title}"
 - Artist(s): ${trackData.artists.join(', ')}
 - Album: "${trackData.album}"
 - Release Date: ${trackData.release_date}
+${popularityContext}
 
-Channel the voice of a sophisticated music critic - thoughtful, perceptive, and nuanced. Provide intelligent analysis that considers:
+${audioInfo}
 
-- The song's place in the artist's catalog and musical evolution
-- Technical and compositional elements that make it work (or don't)
-- Cultural context and influence
-- What the song reveals about the human experience
-- Honest assessment of its artistic merit
+${wikipediaContext}
 
-Be discerning but fair. Recognize genuine craftsmanship when it exists. Point out flaws when they matter. Focus on WHY the song succeeds or fails rather than just declaring it good or bad.
+**Your Task:**
+Write 1-3 SHORT, SPECIFIC sentences (max 60 words total) that provide interesting musical insights.
 
-Write with intelligence and insight. 80-120 words of thoughtful music criticism.
+**STRICT REQUIREMENTS:**
+- Be factual and concrete - reference specific elements from the data above
+- NO vague metaphors or flowery language
+- NO phrases like "sonic landscape," "ethereal journey," "paints a picture," etc.
+- Focus on: musical style, the artist's evolution, cultural context, or technical elements
+- Sound like an informed music journalist, not marketing copy
+- If you mention influences or genres, be specific
 
-Return only the review - make it smart and illuminating.`;
+**Good examples:**
+- "This was Taylor Swift's breakout single in 2014, marking her transition from country to pop."
+- "The track features unconventional 7/4 time signature and blends jazz harmony with electronic production."
+- "Released at the height of the grunge movement, this became Nirvana's signature song."
+
+Return ONLY the insight text - no labels, no extra formatting.`;
 
   try {
     const response = await anthropic.messages.create({
       model: 'claude-3-haiku-20240307',
-      max_tokens: 500,
+      max_tokens: 200,
       messages: [{ role: 'user', content: prompt }],
     });
 
     const content = response.content[0];
     if (content.type === 'text') {
-      return content.text;
+      return content.text.trim();
     }
-    
-    return `# ${trackData.title}\n\n**Artist**: ${trackData.artists.join(', ')}\n**Album**: ${trackData.album}\n**Released**: ${trackData.release_date}\n\n*Unable to generate enrichment content*`;
-    
+
+    return '';
+
   } catch (error) {
     console.error('Claude API error:', error);
-    return `# ${trackData.title}
-
-**Artist**: ${trackData.artists.join(', ')}
-**Album**: ${trackData.album}
-**Released**: ${trackData.release_date}${audioInfo}
-
-*Claude enrichment temporarily unavailable*`;
+    return '';
   }
 }
 

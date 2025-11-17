@@ -1,12 +1,10 @@
 import { useEffect, useState } from 'react';
 import { TrackHeader } from '@/components/TrackHeader';
-import { TrackFactCard } from '@/components/TrackFactCard';
-import { CriticalReview } from '@/components/CriticalReview';
 import { BandInfoCard } from '@/components/BandInfoCard';
-import { InterestingFactsCard } from '@/components/InterestingFactsCard';
+import { TrackInsightsCard } from '@/components/TrackInsightsCard';
 import { PlaybackStatus } from '@/components/PlaybackStatus';
 import { LoadingSkeleton } from '@/components/LoadingSkeleton';
-import { SpotifyPopularityCard } from '@/components/SpotifyPopularityCard';
+import { CompactPopularityCard } from '@/components/CompactPopularityCard';
 
 interface TrackCore {
   title: string;
@@ -236,8 +234,8 @@ export default function Home() {
 
         {/* Main Content Grid */}
         <div className="grid lg:grid-cols-2 gap-8">
-          {/* Left Column - Track Info & Audio Analysis */}
-          <div className="space-y-8">
+          {/* Left Column - Track Info */}
+          <div className="space-y-6">
             {/* Track Header with Album Art */}
             <TrackHeader
               title={core.title}
@@ -248,28 +246,19 @@ export default function Home() {
               isPlaying={isPlaying}
             />
 
-            {/* Spotify Popularity */}
-            <SpotifyPopularityCard popularity={trackStats?.popularity} />
-
-            {/* Track Facts - Simplified to just popularity */}
-            {panelData.track_facts && panelData.track_facts.length > 0 && (
-              <TrackFactCard facts={panelData.track_facts} />
-            )}
+            {/* Compact Popularity Card */}
+            <CompactPopularityCard popularity={trackStats?.popularity} />
           </div>
 
           {/* Right Column - Enriched Content */}
-          <div className="space-y-8">
-            {/* Critical Review with Lyrics */}
-            <CriticalReview
-              title={core.title}
-              songStory={panelData.song_story}
-              heaviestLyrics={panelData.heaviest_lyrics}
+          <div className="space-y-6">
+            {/* Unified Track & Artist Insights */}
+            <TrackInsightsCard
+              interestingFacts={panelData.interesting_facts}
+              aiInsights={panelData.song_story}
             />
 
-            {/* Wikipedia Facts - Right column second row */}
-            <InterestingFactsCard interestingFacts={panelData.interesting_facts} />
-
-            {/* Band Information - Moved to bottom */}
+            {/* Band Information */}
             <BandInfoCard
               bandInfo={panelData.band_info}
               artistName={core.artists[0]}
