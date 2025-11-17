@@ -246,10 +246,10 @@ async function generateInterestingFacts(data: any): Promise<InterestingFacts> {
 
   return { facts: facts.slice(0, 5) };
 }
-async function generateSongStory(data: any): Promise<SongStory> {
+async function generateSongStory(data: any, wikipediaFacts?: string[]): Promise<SongStory> {
   const { track_core } = data;
   const stats = data.track_stats || data.stats;
-  
+
   try {
     // Use the existing Claude integration to generate a real story
     const llmContent = await generateTrackEnrichment({
@@ -257,53 +257,30 @@ async function generateSongStory(data: any): Promise<SongStory> {
       artists: track_core.artists,
       album: track_core.album,
       release_date: track_core.release_date,
+      audioFeatures: data.audio_features,
+      wikipediaFacts: wikipediaFacts,
+      popularity: stats?.popularity,
     });
-    
-    // Extract just the story part from the markdown, remove headers and formatting
-    let story = llmContent
-      .replace(/^#.*$/gm, '') // Remove headers
-      .replace(/\*\*(.*?)\*\*/g, '$1') // Remove bold formatting
-      .replace(/\*(.*?)\*/g, '$1') // Remove italic formatting
-      .replace(/\n+/g, ' ') // Replace newlines with spaces
-      .trim();
-    
-    // Take first paragraph or limit to reasonable length
-    const sentences = story.split('.').filter(s => s.trim().length > 10);
-    if (sentences.length > 4) {
-      story = sentences.slice(0, 4).join('.') + '.';
+
+    if (!llmContent || llmContent.trim().length === 0) {
+      return {
+        text: '',
+        source: 'llm',
+        confidence: 'low'
+      };
     }
-    
-    // Ensure it's not too long (60-110 words target)
-    const words = story.split(' ').filter(w => w.length > 0);
-    if (words.length > 110) {
-      story = words.slice(0, 110).join(' ') + '...';
-    }
-    
+
     return {
-      text: story,
+      text: llmContent,
       source: 'llm',
       confidence: 'high'
     };
-    
+
   } catch (error) {
     console.error('Error generating LLM story:', error);
-    
-    // Fallback to basic thematic analysis when LLM fails
-    let fallbackStory = `${track_core?.title || 'This track'} explores themes central to ${track_core?.artists?.[0] || 'the artist'}'s work.`;
-    
-    if (track_core?.album) {
-      fallbackStory += ` From "${track_core.album}", it represents their perspective on key issues or experiences.`;
-    }
-    
-    if (stats?.artist_info?.[0]?.genres?.length) {
-      const genre = stats.artist_info[0].genres[0];
-      fallbackStory += ` The lyrics reflect typical ${genre} themes and concerns.`;
-    } else {
-      fallbackStory += ` The song's message resonates through its direct lyrical approach.`;
-    }
-    
+
     return {
-      text: fallbackStory,
+      text: '',
       source: 'llm',
       confidence: 'low'
     };
@@ -316,16 +293,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const data = req.body;
-  
+
   if (!data.track_core) {
     return res.status(400).json({ error: 'track_core is required' });
   }
 
   try {
+    // Generate Wikipedia facts first so we can pass them to AI insights
+    const interestingFacts = await generateInterestingFacts(data);
+
     const panelData: PanelData = {
       artist_header: data.track_core.artists?.[0] || 'Unknown Artist',
       track_facts: generateTrackFacts(data),
-      song_story: await generateSongStory(data),
+      song_story: await generateSongStory(data, interestingFacts.facts),
       heaviest_lyrics: {
         text: await generateHeaviestLyrics({
           title: data.track_core.title,
@@ -337,7 +317,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         confidence: 'high'
       },
       band_info: await generateBandInfo(data),
-      interesting_facts: await generateInterestingFacts(data)
+      interesting_facts: interestingFacts
     };
 
     res.status(200).json(panelData);
