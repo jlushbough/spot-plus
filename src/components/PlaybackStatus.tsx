@@ -12,49 +12,57 @@ export const PlaybackStatus: React.FC<PlaybackStatusProps> = ({
   onRefresh
 }) => {
   return (
-    <div className="flex justify-between items-center">
-      <div className="flex items-center space-x-6">
-        {/* Playback Status */}
-        <div className="flex items-center space-x-3 bg-gray-800/50 border border-gray-700/50 rounded-full px-4 py-2">
-          <div className="relative">
-            <div className={`w-3 h-3 rounded-full ${isPlaying ? 'bg-green-500' : 'bg-gray-500'}`} />
-            {isPlaying && (
-              <div className="absolute inset-0 w-3 h-3 rounded-full bg-green-500 animate-ping" />
-            )}
+    <div className="relative overflow-hidden rounded-[30px] border border-amber-900/50 bg-[#130903] shadow-[0_20px_60px_rgba(0,0,0,0.5)] px-6 py-5">
+      <div className="absolute inset-0 opacity-60" style={{ backgroundImage: 'linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(18,9,3,0.8) 55%)' }} />
+      <div className="relative flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:gap-10">
+          <div className="flex items-center gap-4">
+            <div className={`w-4 h-4 rounded-full border border-black shadow-inner ${
+              isPlaying ? 'bg-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.9)]' : 'bg-gray-500'
+            }`} />
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.5em] text-amber-500">Transport</p>
+              <p className="text-2xl font-semibold text-amber-50">{isPlaying ? 'Run' : 'Hold'}</p>
+            </div>
           </div>
-          <span className={`text-sm font-medium ${isPlaying ? 'text-green-400' : 'text-gray-400'}`}>
-            {isPlaying ? 'Now Playing' : 'Paused'}
-          </span>
+
+          {lastRefresh && (
+            <div className="flex items-center gap-3 text-amber-200/70 text-sm">
+              <span className="text-[10px] uppercase tracking-[0.4em] text-amber-500">Sync</span>
+              <span className="font-mono">{lastRefresh.toLocaleTimeString()}</span>
+            </div>
+          )}
         </div>
 
-        {/* Last Updated */}
-        {lastRefresh && (
-          <div className="flex items-center space-x-2 text-gray-500">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span className="text-xs">
-              Updated {lastRefresh.toLocaleTimeString()}
-            </span>
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-3">
+            {['A/B', 'Stereo'].map((label) => (
+              <button
+                key={label}
+                className="relative w-16 h-16 rounded-full border border-amber-900/60 bg-gradient-to-b from-[#1a1009] to-[#050302] text-[10px] uppercase tracking-[0.3em] text-amber-200/70 shadow-[inset_0_-8px_15px_rgba(0,0,0,0.8),0_10px_25px_rgba(0,0,0,0.6)]"
+              >
+                <span className="absolute inset-0 flex items-center justify-center">
+                  {label}
+                </span>
+                <span className="absolute top-1 left-1 w-2 h-2 rounded-full bg-amber-500/60" />
+              </button>
+            ))}
           </div>
-        )}
-      </div>
 
-      {/* Refresh Button */}
-      <button
-        onClick={onRefresh}
-        className="group flex items-center space-x-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-gray-600 text-gray-300 hover:text-white text-sm rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl"
-      >
-        <svg
-          className="w-4 h-4 group-hover:rotate-180 transition-transform duration-500"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-        </svg>
-        <span className="font-medium">Refresh</span>
-      </button>
+          <button
+            onClick={onRefresh}
+            className="group relative flex items-center gap-3 rounded-[18px] border border-amber-900/60 bg-gradient-to-r from-[#2b180c] to-[#140903] px-5 py-3 text-amber-50 shadow-[0_10px_25px_rgba(0,0,0,0.45)]"
+          >
+            <div className="w-9 h-9 rounded-full border border-black bg-gradient-to-b from-amber-200 to-amber-500 text-black flex items-center justify-center font-bold group-hover:rotate-45 transition-transform duration-500">
+              ↻
+            </div>
+            <div className="text-left">
+              <p className="text-[10px] uppercase tracking-[0.35em] text-amber-500">Manual</p>
+              <p className="text-sm font-semibold">Refresh</p>
+            </div>
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
