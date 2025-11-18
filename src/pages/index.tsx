@@ -217,11 +217,13 @@ export default function Home() {
   const trackStats = data.track_stats;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-black p-6 md:p-10">
+    <div className="min-h-screen bg-[#050100] text-amber-50 p-6 md:p-10">
       {/* Ambient Background */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-0 left-0 w-96 h-96 bg-green-500/10 rounded-full blur-3xl" />
+        <div className="absolute inset-0 opacity-60" style={{ backgroundImage: 'radial-gradient(circle at top, rgba(251,191,36,0.08), transparent 55%)' }} />
+        <div className="absolute top-[-20%] right-[-10%] w-[32rem] h-[32rem] bg-amber-500/10 rounded-full blur-[120px]" />
+        <div className="absolute bottom-[-25%] left-[-10%] w-[30rem] h-[30rem] bg-orange-400/10 rounded-full blur-[120px]" />
+        <div className="absolute inset-0 mix-blend-soft-light" style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/dark-wood.png")' }} />
       </div>
 
       <div className="relative max-w-7xl mx-auto space-y-8">
