@@ -217,11 +217,12 @@ export default function Home() {
   const trackStats = data.track_stats;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-black p-6 md:p-10">
+    <div className="min-h-screen bg-[#050301] p-6 md:p-10 text-amber-50">
       {/* Ambient Background */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-0 left-0 w-96 h-96 bg-green-500/10 rounded-full blur-3xl" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,193,120,0.12),_transparent_45%),radial-gradient(circle_at_bottom,_rgba(143,86,38,0.25),_transparent_40%)]" />
+        <div className="absolute inset-0 opacity-30" style={{ backgroundImage: 'linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)', backgroundSize: '120px' }} />
+        <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'linear-gradient(180deg, rgba(255,255,255,0.05) 1px, transparent 1px)', backgroundSize: '140px' }} />
       </div>
 
       <div className="relative max-w-7xl mx-auto space-y-8">
